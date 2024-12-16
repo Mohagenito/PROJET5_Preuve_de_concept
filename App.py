@@ -4,6 +4,7 @@ from torchvision import models, transforms, datasets
 from torch import nn
 from PIL import Image, ImageOps
 import os
+import gdown  # Utiliser gdown pour télécharger les modèles depuis Google Drive
 from torchvision.transforms.functional import to_pil_image
 import matplotlib.pyplot as plt
 import numpy as np
@@ -26,6 +27,12 @@ class_labels = {
     9: "truck"
 }
 
+# URL des modèles sur Google Drive
+model_urls = {
+    "ResNet50": "https://drive.google.com/uc?id=1WTO_F6CG6NLd_BxnTCZZDv1oPkX2I00f",
+    "ConvNeXt": "https://drive.google.com/uc?id=14di4RyyKzeBuRUlB_N1n6EkDvo-AVvqn"
+}
+
 # Transformation personnalisée pour l'égalisation d'histogramme
 class HistogramEqualization:
     def __call__(self, img):
@@ -42,26 +49,28 @@ transform = transforms.Compose([
     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])  # Normalisation
 ])
 
-# Charger les modèles
+# Télécharger le modèle depuis Google Drive
+def download_model(model_name):
+    model_path = f"{model_name}.pth"
+    if not os.path.exists(model_path):
+        # Télécharger le modèle depuis Google Drive
+        gdown.download(model_urls[model_name], model_path, quiet=False)
+    return model_path
+
+# Charger le modèle
 def load_model(model_name):
-    model_path = ""
+    model_path = download_model(model_name)
+    
     if model_name == "ResNet50":
-        model_path = "ResNet50_optimized.pth"
-        model = models.resnet50(weights="DEFAULT")
+        model = models.resnet50(weights=None)  # Pas de poids pré-entraînés
         model.fc = nn.Linear(in_features=model.fc.in_features, out_features=num_classes, bias=True)
     elif model_name == "ConvNeXt":
-        model_path = "ConvNeXt_transfer_learning_quantized.pth"
-        model = models.convnext_base(weights="DEFAULT")
+        model = models.convnext_base(weights=None)  # Pas de poids pré-entraînés
         model.classifier[2] = nn.Linear(in_features=model.classifier[2].in_features, out_features=num_classes, bias=True)
     
-    # Vérifier si le fichier existe
-    if not os.path.exists(model_path):
-        st.error(f"Fichier de modèle introuvable : {model_path}")
-        st.stop()
-    
-    # Charger le modèle
-    model.load_state_dict(torch.load(model_path))
-    model = model.to(device)
+    # Charger le modèle sur le CPU si CUDA n'est pas disponible
+    model.load_state_dict(torch.load(model_path, map_location=torch.device('cpu')))
+    model = model.to(device)  # Assurez-vous que le modèle est déplacé vers le bon appareil
     model.eval()
     return model
 
